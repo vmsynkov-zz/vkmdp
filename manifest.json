@@ -1,0 +1,32 @@
+{
+  "manifest_version": 2,
+  "name": "vkmdp",
+  "author": "vmsynkov",
+  "version": "1.0",
+  "description": "vk music downloader plus",
+  "icons": {
+      "32" : "icons/32.png",
+      "128" : "icons/128.png"
+    },
+  "browser_action": {
+    "default_title": "vkmdp",
+    "default_icon": {
+      "128": "icons/128.png"
+    }
+  },
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "permissions": [
+    "downloads"
+  ],
+  "content_scripts": [
+     {
+      "matches": ["*://vk.com/*"],
+      "css": ["vkmdp.css"],
+      "js": ["vkmdp.js"]
+    }
+  ],
+  "web_accessible_resources": ["img/btn.png"]
+}
+
