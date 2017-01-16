@@ -15,18 +15,22 @@
     }
   },
   "background": {
-    "scripts": ["background.js"]
+    "page": "background.html",
+    "persistent": true
   },
   "permissions": [
-    "downloads"
+    "downloads",
+    "*://*.vk.com/*",
+    "webRequest",
+    "webRequestBlocking"
   ],
   "content_scripts": [
      {
       "matches": ["*://vk.com/*"],
       "css": ["vkmdp.css"],
-      "js": ["vkmdp.js"]
+      "js": ["vkmdp.js"],
+      "all_frames": true
     }
   ],
   "web_accessible_resources": ["img/btn.png"]
 }
-

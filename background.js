@@ -27,3 +27,15 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       })
   }
 })
+
+chrome.webRequest.onHeadersReceived.addListener(
+  (info) => {
+    var headers = info.responseHeaders
+    var index = headers.findIndex(h => h.name.toLowerCase() === 'x-frame-options')
+
+    if (index !== -1) headers.splice(index, 1)
+    return {responseHeaders: headers}
+  },
+  {urls: ['*://vk.com/*'], types: ['sub_frame']},
+  ['blocking', 'responseHeaders']
+)
