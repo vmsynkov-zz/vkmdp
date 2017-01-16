@@ -2,6 +2,13 @@
 
 var currentLoads = []
 
+window.addEventListener('message', (e) => {
+  if (e.origin !== 'https://vk.com') return
+  if (e.data === 'loaded') {
+    chrome.webRequest.onHeadersReceived.removeListener(_onRequest)
+  }
+})
+
 chrome.downloads.onChanged.addListener(function (delta) {
   if (delta.endTime) {
     var ended = currentLoads.indexOf(delta.id)
@@ -28,14 +35,16 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   }
 })
 
-chrome.webRequest.onHeadersReceived.addListener(
-  (info) => {
-    var headers = info.responseHeaders
-    var index = headers.findIndex(h => h.name.toLowerCase() === 'x-frame-options')
+function _onRequest (info) {
+  var headers = info.responseHeaders
+  var index = headers.findIndex(h => h.name.toLowerCase() === 'x-frame-options')
 
-    if (index !== -1) headers.splice(index, 1)
-    return {responseHeaders: headers}
-  },
+  if (index !== -1) headers.splice(index, 1)
+  return {responseHeaders: headers}
+}
+
+chrome.webRequest.onHeadersReceived.addListener(
+  _onRequest,
   {urls: ['*://vk.com/*'], types: ['sub_frame']},
   ['blocking', 'responseHeaders']
 )

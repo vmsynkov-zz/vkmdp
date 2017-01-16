@@ -14,6 +14,7 @@ var idReg = /\["?(\d+)"?,"?(-?\d+)"?/
 var albumIdReg = /(-?\d+)_(-?\d+)/
 var trackUrlReg = /https.*?"/
 var vkApiVer = '5.62'
+var extOrigin = 'chrome-extension://' + chrome.i18n.getMessage('@@extension_id')
 
 /**
  * Inserts all load btns and registers observer for body
@@ -27,6 +28,8 @@ var vkApiVer = '5.62'
   addPlayerBtn(document)
   addAlbumBtn(document)
   addObserver()
+
+  window.top.postMessage('loaded', extOrigin)
 })()
 
 /**
