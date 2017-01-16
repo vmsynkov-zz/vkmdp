@@ -1,16 +1,6 @@
 /* global chrome */
 
-/**
- * Information needed to download song
- * @typedef {Object} trackData
- * @property {number} userId User id
- * @property {number} trackId Song id
- * @property {string} artist Artist name
- * @property {string} song Song name
- */
-
 var badFileReg = /[\\~#%&*{}/:<>?|"]/gi
-var idReg = /\["?(\d+)"?,"?(-?\d+)"?/
 var albumIdReg = /(-?\d+)_(-?\d+)/
 var trackUrlReg = /https.*?"/
 var vkApiVer = '5.62'
@@ -50,10 +40,10 @@ function mark (element) {
  */
 function addRowBtn (audioRow) {
   if (!mark(audioRow)) return
-  var data = getData(audioRow)
-  var btn = createLoadBtn(data, ['vkmpd_loadBtn'], singleDownload)
+  var btn = createLoadBtn(null, ['vkmpd_loadBtn'], singleDownload)
   audioRow.insertBefore(btn, audioRow.children[1])
   audioRow.addEventListener('click', () => {
+    var data = JSON.parse(audioRow.dataset.audio)
     updatePlayerBtn(data)
   })
 }
@@ -121,38 +111,8 @@ function addObserver () {
 function updatePlayerBtn (data) {
   var players = document.querySelectorAll('.audio_page_player')
   players.forEach(player => {
-    var btn = player.children[1]
-    for (var prop in data) {
-      btn.dataset[prop] = data[prop]
-    }
+    player.dataset.audio = JSON.stringify(data)
   })
-}
-
-/**
- * Extracts ids and title from .audio_row or .audio_page_player
- *
- * @param {HTMLElement} elem
- * @returns {trackData}
- */
-function getData (elem) {
-  if (!elem.dataset.audio) return
-  var ids = elem.dataset.audio.match(idReg)
-  var wrap
-  if (elem.className.includes('player')) {
-    wrap = elem.querySelector('.audio_page_player_title')
-  } else {
-    wrap = elem.querySelector('.audio_title_wrap')
-  }
-  var artist = fixFileString(wrap.firstElementChild.innerText)
-  // player has $nbsp;–$nbsp; before title
-  var song = fixFileString(wrap.lastElementChild.innerText.replace(/^\s–\s/, ''))
-
-  return {
-    userId: ids[2],
-    trackId: ids[1],
-    artist,
-    song
-  }
 }
 
 /**
@@ -163,10 +123,9 @@ function getData (elem) {
 function addPlayerBtn (root) {
   var players = root.querySelectorAll('.audio_page_player')
   players.forEach(player => {
-    var data = getData(player)
-    if (!data) return
+    if (!player.dataset.audio) return
     if (!mark(player)) return
-    var btn = createLoadBtn(data, ['vkmpd_loadBtn', 'vkmpd_loadBtn__player'], singleDownload)
+    var btn = createLoadBtn(null, ['vkmpd_loadBtn', 'vkmpd_loadBtn__player'], singleDownload)
     player.insertBefore(btn, player.children[1])
   })
 }
