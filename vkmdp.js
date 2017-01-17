@@ -1,6 +1,8 @@
 /* global chrome */
 
-var badFileReg = /[\\~#%&*{}/:<>?|"]/gi
+// chars that might cause download error
+var badFileChars = /[\\~#%&*{}/:<>?|"]/gi
+// extracts userId and albumId from a[id^=ui_rmenu_audio_album] id attribute
 var albumIdReg = /(-?\d+)_(-?\d+)/
 var trackUrlReg = /https.*?"/
 var vkApiVer = '5.62'
@@ -8,6 +10,8 @@ var extOrigin = 'chrome-extension://' + chrome.i18n.getMessage('@@extension_id')
 
 /**
  * Inserts all load btns and registers observer for body
+ * Sends message to background.js from iframe to deny again
+ * inserting frames with vk.com
  */
 ;(function init () {
   var audioRows = document.querySelectorAll('.audio_row')
@@ -44,12 +48,12 @@ function addRowBtn (audioRow) {
   audioRow.insertBefore(btn, audioRow.children[1])
   audioRow.addEventListener('click', () => {
     var data = JSON.parse(audioRow.dataset.audio)
-    updatePlayerBtn(data)
+    updatePlayerData(data)
   })
 }
 
 /**
- * Performs song download on load btn click
+ * Handler for album load btn click. Queues song download in background.js
  *
  * @param {Event} event
  */
@@ -66,49 +70,52 @@ function singleDownload (event) {
   })
 }
 
+/**
+ * Adds MutationObserver to body that listens to .audio_row, .audio_page_player,
+ * .ui_rmenu_audio_album inserting or inserting of nodes that contain .audio_row
+ * or changes in .audio_page_player attributes and calls appropriate handlers
+ */
 function addObserver () {
+  var config = {subtree: true, childList: true, attributes: true}
   var target = document.body
-  var observer = new window.MutationObserver(function handleObserve (mutations) {
-    mutations.forEach(function (mutation) {
-      if (mutation.addedNodes.length) {
-        mutation.addedNodes.forEach(node => {
+  var observer = new window.MutationObserver(function handleObserve (muts) {
+    muts.forEach(function (mut) {
+      var isPlayerAttr = mut.target.className.includes('audio_page_player')
+
+      if (mut.addedNodes.length) {
+        mut.addedNodes.forEach(node => {
           if (node.nodeType !== 1) return
+
           var isAudio = node.className.includes('audio_row')
           var hasAudios = node.innerHTML.includes('audio_row')
           var hasAlbums = node.innerHTML.includes('ui_rmenu_audio_album')
           var hasPagePlayer = node.innerHTML.includes('audio_page_player')
-          if (isAudio) {
-            addRowBtn(node)
-          }
+
+          if (isAudio) addRowBtn(node)
+          if (hasAlbums) addAlbumBtn(node)
+          if (hasPagePlayer) addPlayerBtn(node)
           if (hasAudios) {
             node.querySelectorAll('.audio_row').forEach(row => {
               addRowBtn(row)
             })
           }
-          if (hasAlbums) {
-            addAlbumBtn(node)
-          }
-          if (hasPagePlayer) {
-            addPlayerBtn(node)
-          }
         })
       }
 
-      if (mutation.type === 'attributes' && mutation.target.className.includes('audio_page_player')) {
-        addPlayerBtn(document)
+      if (mut.type === 'attributes') {
+        if (isPlayerAttr) addPlayerBtn(document)
       }
     })
   })
-  var config = {subtree: true, childList: true, attributes: true}
   observer.observe(target, config)
 }
 
 /**
- * Handler that changes players load btn dataset when .audio_row play btn was clicked
+ * Handler that changes players dataset.audio when .audio_row play btn was clicked
  *
- * @param {trackData} data
+ * @param {string[]} data dataset.audio provided by vk
  */
-function updatePlayerBtn (data) {
+function updatePlayerData (data) {
   var players = document.querySelectorAll('.audio_page_player')
   players.forEach(player => {
     player.dataset.audio = JSON.stringify(data)
@@ -123,6 +130,8 @@ function updatePlayerBtn (data) {
 function addPlayerBtn (root) {
   var players = root.querySelectorAll('.audio_page_player')
   players.forEach(player => {
+    // there will be several calls to this func from observer
+    // and the first one wont have dataset on the element
     if (!player.dataset.audio) return
     if (!mark(player)) return
     var btn = createLoadBtn(null, ['vkmpd_loadBtn', 'vkmpd_loadBtn__player'], singleDownload)
@@ -151,6 +160,13 @@ function createLoadBtn (data, cssClasses, clickHandler) {
   return btn
 }
 
+/**
+ * Gets url for a single track from /al_audio.php
+ *
+ * @param {Number} userId
+ * @param {Number} trackId
+ * @param {Function} cb
+ */
 function getUrl (userId, trackId, cb) {
   var url = '/al_audio.php'
   var data = {
@@ -172,6 +188,13 @@ function getUrl (userId, trackId, cb) {
   })
 }
 
+/**
+ * Gets album playlist from /al_audio.php
+ *
+ * @param {Number} userId
+ * @param {Number} albumId
+ * @param {Function} cb
+ */
 function getPlaylist (userId, albumId, cb) {
   var data = {
     act: 'load_silent',
@@ -194,6 +217,11 @@ function getPlaylist (userId, albumId, cb) {
   })
 }
 
+/**
+ * Handler for album load btn click. Queues album download in background.js
+ *
+ * @param {Event} event
+ */
 function downloadAlbum (event) {
   var data = event.target.dataset
   event.stopPropagation()
@@ -210,10 +238,16 @@ function downloadAlbum (event) {
   })
 }
 
+/**
+ * Adds load btn in user albums elements with userId, albumId, albumName in
+ * dataset
+ * @param {Node} root
+ */
 function addAlbumBtn (root) {
   var albums = root.querySelectorAll(`a[id^=ui_rmenu_audio_album]`)
   if (!albums) return
   var ids
+  var userId
   var albumId
   var albumName
   var span
@@ -222,22 +256,36 @@ function addAlbumBtn (root) {
     if (!mark(album)) return
 
     ids = album.id.match(albumIdReg)
+    userId = ids[1]
     albumId = ids[2]
 
+    // vk marks all albums with -2
     if (albumId === '-2') albumName = 'All'
     else albumName = fixFileString(album.querySelector('.audio_album_title').innerText)
 
     span = album.firstElementChild
-    btn = createLoadBtn({userId: ids[1], albumId, albumName}, ['vkmpd_loadBtn', 'vkmpd_loadBtn__album'], downloadAlbum)
+    btn = createLoadBtn({userId, albumId, albumName}, ['vkmpd_loadBtn', 'vkmpd_loadBtn__album'], downloadAlbum)
     span.insertBefore(btn, span.firstElementChild)
   })
 }
 
+/**
+ * Replace bad chars that might cause download error from a sting and
+ * trims white space
+ * @param {string} string
+ * @returns {string}
+ */
 function fixFileString (string) {
-  var fixedString = string.replace(badFileReg, '')
+  var fixedString = string.replace(badFileChars, '')
   return fixedString.trim()
 }
 
+/**
+ * Gets user name(first name and last name concated) or group name from vk api
+ *
+ * @param {Number} id
+ * @param {Function} cb
+ */
 function getNameById (id, cb) {
   var url = `https://api.vk.com/method/`
   var data = {
@@ -258,6 +306,14 @@ function getNameById (id, cb) {
   })
 }
 
+/**
+ * Creates and sends get or post XMLHttpRequest
+ *
+ * @param {string} method
+ * @param {string} url
+ * @param {Object} data
+ * @param {Function} cb
+ */
 function xhr (method, url, data, cb) {
   var DONE = 4
   var OK = 200
@@ -281,12 +337,18 @@ function xhr (method, url, data, cb) {
   xhr.send(encodeParams(data))
 }
 
-function encodeParams (object) {
+/**
+ * Encodes object key\value pairs in string uri form
+ *
+ * @param {Object} object
+ * @returns {string}
+ */
+function encodeParams (data) {
   var encoded = ''
-  for (var prop in object) {
-    if (object.hasOwnProperty(prop)) {
+  for (var prop in data) {
+    if (data.hasOwnProperty(prop)) {
       if (encoded.length > 0) encoded += '&'
-      encoded += encodeURI(prop + '=' + object[prop])
+      encoded += encodeURI(prop + '=' + data[prop])
     }
   }
   return encoded
