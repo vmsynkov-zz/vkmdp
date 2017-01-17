@@ -319,7 +319,7 @@ function xhr (method, url, data, cb) {
   var OK = 200
   var xhr = new window.XMLHttpRequest()
   xhr.onerror = function () {
-    console.log('An error occurred during the transaction')
+    cb({type: 'transaction'})
   }
   xhr.open(method.toUpperCase(), url)
   if (method === 'post') {
@@ -330,7 +330,7 @@ function xhr (method, url, data, cb) {
       if (xhr.status === OK) {
         cb(null, xhr.responseText)
       } else {
-        cb(xhr.status)
+        cb({type: 'http', data: xhr.status})
       }
     }
   }
