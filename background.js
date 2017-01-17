@@ -33,6 +33,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         }
       })
   }
+
+  if (message.type === 'queue') {
+    console.log('queue')
+  }
 })
 
 function _onRequest (info) {

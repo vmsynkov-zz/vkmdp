@@ -228,7 +228,7 @@ function downloadAlbum (event) {
   event.preventDefault()
   var uid = data.userId
   var aid = data.albumId
-  getNameById(uid, (err, res) => {
+  getName(uid, (err, res) => {
     if (err) console.log(err)
     console.log(res)
     getPlaylist(uid, aid, (err, res) => {
@@ -286,8 +286,8 @@ function fixFileString (string) {
  * @param {Number} id
  * @param {Function} cb
  */
-function getNameById (id, cb) {
-  var url = `https://api.vk.com/method/`
+function getName (id, cb) {
+  var url = 'https://api.vk.com/method/'
   var data = {
     v: vkApiVer
   }
@@ -300,9 +300,20 @@ function getNameById (id, cb) {
   }
   xhr('post', url, data, (err, res) => {
     if (err) cb(err)
-    res = JSON.parse(res).response[0]
-    if (res.name) cb(null, res.name)
-    else cb(null, res.first_name + ' ' + res.last_name)
+    try {
+      var resObj = JSON.parse(res)
+    } catch (e) {
+      cb({type: 'json', data: e})
+      return
+    }
+    var vkError = resObj.error
+    if (vkError) {
+      cb({type: 'vk', data: vkError})
+    } else {
+      var resp = resObj.response
+      if (resp.name) cb(null, resp.name)
+      else cb(null, resp.first_name + ' ' + resp.last_name)
+    }
   })
 }
 
